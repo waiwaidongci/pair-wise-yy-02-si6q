@@ -80,6 +80,64 @@ button, input, textarea { font: inherit; }
 .inspector-panel .ant-form-item { margin-bottom: 13px; }
 .empty-inspector { color: #8390a2; }
 .run-facts { display: grid; gap: 7px; margin-bottom: 12px; padding: 11px; border-radius: 7px; background: #f4f7fa; color: #59687c; font-size: 11px; }
+
+/* 节点执行状态：失效（stale）、取消（cancelled）、失败（error） */
+.workflow-node.status-success { border-left-color: #16a34a; }
+.workflow-node.status-stale { border-left: 4px solid #d97706; }
+.workflow-node.status-error { border-left: 4px solid #dc2626; }
+.workflow-node.status-cancelled { border-left: 4px solid #94a3b8; opacity: .92; }
+.node-status.status-stale { color: #b45309; }
+.node-status.status-error { color: #dc2626; }
+.node-status.status-cancelled { color: #64748b; }
+.node-status.status-queued { color: #64748b; }
+.metric-stale { color: #b45309; background: #fef3c7 !important; }
+.metric-cancelled { color: #475569; background: #e2e8f0 !important; }
+
+/* 执行计划抽屉 */
+.plan-drawer .ant-drawer-header { padding: 10px 16px; border-bottom: 1px solid #e5ebf3; }
+.plan-drawer-title { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.plan-version-tag { margin-left: 6px; font-weight: 400; }
+.plan-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; }
+.plan-history { border-right: 1px solid #e5ebf3; overflow: auto; padding: 10px; background: #f8fafc; }
+.plan-history-head { font-size: 12px; color: #64748b; margin: 2px 4px 10px; }
+.plan-history-item {
+  width: 100%; display: flex; align-items: center; gap: 6px;
+  padding: 8px 9px; margin-bottom: 6px;
+  text-align: left; border: 1px solid #e2e8f0; border-radius: 7px; background: #fff; cursor: pointer;
+}
+.plan-history-item:hover { border-color: #93c5fd; }
+.plan-history-item.is-active { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .12); }
+.plan-history-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #1e293b; }
+.plan-history-id { font-size: 10px; color: #94a3b8; font-family: ui-monospace, monospace; }
+.plan-history-item .ant-tag { margin-inline-end: 0; }
+.plan-detail { min-width: 0; overflow: auto; padding: 14px 18px; }
+.plan-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.plan-meta-line { font-size: 11px; display: block; margin-top: 3px; }
+.plan-head-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.plan-alert { margin-top: 12px; }
+.plan-layers { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.plan-layer { border: 1px solid #e5ebf3; border-radius: 9px; padding: 10px 12px; background: #fbfdff; }
+.plan-layer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.plan-layer-index { font-size: 12px; font-weight: 600; color: #334155; margin-right: auto; }
+.plan-layer-nodes { display: flex; gap: 9px; flex-wrap: wrap; }
+.plan-node-chip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 10px; border: 1px solid #d7e0ec; border-left: 3px solid var(--node-color);
+  border-radius: 7px; background: #fff; cursor: pointer; max-width: 240px;
+}
+.plan-node-chip:hover { border-color: #60a5fa; background: #f0f7ff; }
+.plan-node-chip.status-success { background: #f2fbf4; }
+.plan-node-chip.status-stale { background: #fffbeb; border-left-color: #d97706; }
+.plan-node-chip.status-error { background: #fef2f2; border-left-color: #dc2626; }
+.plan-node-chip.status-cancelled { background: #f4f6f9; opacity: .85; }
+.plan-node-chip.status-running { border-color: #2563eb; }
+.plan-node-status { display: inline-flex; align-items: center; font-size: 13px; }
+.plan-node-label { font-size: 12px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-node-flags { display: inline-flex; gap: 3px; }
+.mini-tag { margin-inline-end: 0; font-size: 10px; line-height: 14px; padding: 0 4px; }
+.plan-chip-tip { font-size: 11px; line-height: 17px; }
+.plan-chip-error { color: #fecaca; margin-top: 2px; max-width: 300px; }
+
 @keyframes pulse-border { from { box-shadow: 0 0 0 0 rgba(37, 99, 235, .12); } to { box-shadow: 0 0 0 7px rgba(37, 99, 235, .02); } }
 @media (max-width: 1180px) {
   .editor-grid { grid-template-columns: 210px minmax(480px, 1fr) 280px; }

@@ -1,4 +1,4 @@
-import { Button, Divider, Form, Input, InputNumber, Select, Space, Switch, Tag, Typography } from 'antd'
+import { Alert, Button, Divider, Form, Input, InputNumber, Select, Space, Switch, Tag, Typography } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { statusLabel, useWorkflowStore } from '../stores/workflow'
 import { definitionFor } from '../utils/workflow'
@@ -87,7 +87,19 @@ export default function Inspector() {
         ))}
       </Form>
       <Space direction="vertical" style={{ width: '100%' }}>
+        {node.data.status === 'stale' && (
+          <Alert
+            type="warning"
+            showIcon
+            message="该节点结果已失效"
+            description="节点配置或上游连接发生变化，再次提交执行将重算本节点及其下游；未受影响的成功结果继续复用。"
+          />
+        )}
+        {node.data.status === 'cancelled' && (
+          <Alert type="info" showIcon message="该节点在上次计划中未开始执行即被取消" />
+        )}
         <div className="run-facts">
+          <span>配置版本：v{node.data.configVersion}</span>
           <span>输入端口：{definition.inputs.join(' / ') || '无'}</span>
           <span>输出端口：{definition.outputs.join(' / ') || '无'}</span>
           <span>最近耗时：{node.data.duration ?? '--'} ms</span>

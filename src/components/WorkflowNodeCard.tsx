@@ -1,7 +1,15 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons'
+import {
+  CheckCircleFilled,
+  ClockCircleOutlined,
+  CloseCircleFilled,
+  FieldTimeOutlined,
+  LoadingOutlined,
+  PauseCircleFilled,
+} from '@ant-design/icons'
 import type { RunStatus, WorkflowNode } from '../types/workflow'
 import { definitionFor } from '../utils/workflow'
+import { statusLabel } from '../stores/workflow'
 
 const statusIcon: Record<RunStatus, React.ReactNode> = {
   idle: <ClockCircleOutlined />,
@@ -10,6 +18,8 @@ const statusIcon: Record<RunStatus, React.ReactNode> = {
   success: <CheckCircleFilled />,
   error: <CloseCircleFilled />,
   skipped: <ClockCircleOutlined />,
+  stale: <FieldTimeOutlined />,
+  cancelled: <PauseCircleFilled />,
 }
 
 export default function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowNode>) {
@@ -33,7 +43,7 @@ export default function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowN
         <span className="node-kind">{data.kind}</span>
         <span className={`node-status status-${data.status}`}>
           {statusIcon[data.status]}
-          {data.status}
+          {statusLabel(data.status)}
         </span>
       </div>
       <strong>{data.label}</strong>
@@ -41,6 +51,8 @@ export default function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowN
       <div className="node-metrics">
         {data.rows !== undefined && <span>{data.rows.toLocaleString('zh-CN')} 行</span>}
         {data.duration !== undefined && <span>{data.duration} ms</span>}
+        {data.status === 'stale' && <span className="metric-stale">结果待重算</span>}
+        {data.status === 'cancelled' && <span className="metric-cancelled">未执行</span>}
       </div>
       {definition.outputs.map((type, index) => (
         <Handle

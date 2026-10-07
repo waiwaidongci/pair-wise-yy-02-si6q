@@ -83,6 +83,7 @@ export function createWorkflowNode(
       kind,
       description: definition.description,
       config: defaultConfig(kind),
+      configVersion: 1,
       status: 'idle',
     },
   }
