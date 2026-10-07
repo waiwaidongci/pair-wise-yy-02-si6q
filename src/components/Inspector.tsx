@@ -8,6 +8,9 @@ export default function Inspector() {
   const selectedEdgeId = useWorkflowStore((state) => state.selectedEdgeId)
   const node = useWorkflowStore((state) => state.nodes.find((item) => item.id === state.selectedNodeId))
   const edge = useWorkflowStore((state) => state.edges.find((item) => item.id === state.selectedEdgeId))
+  const planRecord = useWorkflowStore((state) =>
+    state.executionPlan?.nodes.find((item) => item.id === state.selectedNodeId),
+  )
   const updateNode = useWorkflowStore((state) => state.updateNode)
   const updateConfig = useWorkflowStore((state) => state.updateConfig)
   const deleteSelection = useWorkflowStore((state) => state.deleteSelection)
@@ -90,9 +93,19 @@ export default function Inspector() {
         <div className="run-facts">
           <span>输入端口：{definition.inputs.join(' / ') || '无'}</span>
           <span>输出端口：{definition.outputs.join(' / ') || '无'}</span>
+          <span>配置版本：v{node.data.configVersion}</span>
           <span>最近耗时：{node.data.duration ?? '--'} ms</span>
           <span>处理行数：{node.data.rows?.toLocaleString('zh-CN') ?? '--'}</span>
         </div>
+        {planRecord && (
+          <div className="run-facts plan-facts">
+            <span>计划状态：{statusLabel(planRecord.status === 'pending' ? 'queued' : planRecord.status)}</span>
+            <span>结果来源：{planRecord.cached ? '复用上轮计划' : '本次执行'}</span>
+            <span>尝试 / 重试：{planRecord.attempts} / {planRecord.retries}</span>
+            {planRecord.error && <span className="plan-error">失败原因：{planRecord.error}</span>}
+            <span className="plan-fingerprint" title={planRecord.fingerprint}>指纹：{planRecord.fingerprint}</span>
+          </div>
+        )}
         <Button danger block icon={<DeleteOutlined />} onClick={deleteSelection}>删除节点</Button>
       </Space>
     </aside>

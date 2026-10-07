@@ -31,6 +31,7 @@ export default function EditorView() {
       nodes: store.nodes,
       edges: store.edges,
       savedAt: new Date().toISOString(),
+      executionPlan: store.executionPlan ?? undefined,
     }
     const blob = new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)

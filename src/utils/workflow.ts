@@ -1,5 +1,16 @@
 import type { Connection } from '@xyflow/react'
-import type { NodeDefinition, PortType, WorkflowEdge, WorkflowNode } from '../types/workflow'
+import type {
+  ExecutionPlan,
+  NodeConfig,
+  NodeDefinition,
+  PlanEdgeRecord,
+  PlanNodeRecord,
+  PortType,
+  RunStatus,
+  WorkflowDocument,
+  WorkflowEdge,
+  WorkflowNode,
+} from '../types/workflow'
 
 export const NODE_DEFINITIONS: NodeDefinition[] = [
   {
@@ -83,6 +94,7 @@ export function createWorkflowNode(
       kind,
       description: definition.description,
       config: defaultConfig(kind),
+      configVersion: 1,
       status: 'idle',
     },
   }
@@ -187,6 +199,211 @@ export function autoLayout(nodes: WorkflowNode[], edges: WorkflowEdge[]): Workfl
     const index = (columns.get(column) ?? []).findIndex((item) => item.id === node.id)
     return { ...node, position: { x: 90 + column * 260, y: 90 + index * 150 } }
   })
+}
+
+/** FNV-1a 32 位哈希，用于生成稳定的指纹 */
+export function hashString(input: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(36)
+}
+
+function stableConfig(config: NodeConfig): string {
+  const sorted = Object.keys(config)
+    .sort()
+    .reduce<NodeConfig>((acc, key) => {
+      acc[key] = config[key]
+      return acc
+    }, {})
+  return JSON.stringify(sorted)
+}
+
+/** 按依赖深度分层：同层节点互不依赖，可并发执行 */
+export function computeLayers(nodes: WorkflowNode[], edges: WorkflowEdge[]): string[][] {
+  const indegree = new Map<string, number>()
+  const outgoing = new Map<string, string[]>()
+  nodes.forEach((node) => {
+    indegree.set(node.id, 0)
+    outgoing.set(node.id, [])
+  })
+  edges.forEach((edge) => {
+    if (!indegree.has(edge.source) || !indegree.has(edge.target)) return
+    indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1)
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target])
+  })
+
+  const depth = new Map<string, number>()
+  const queue: string[] = []
+  nodes.forEach((node) => {
+    if (indegree.get(node.id) === 0) {
+      depth.set(node.id, 0)
+      queue.push(node.id)
+    }
+  })
+
+  const layers: string[][] = []
+  while (queue.length) {
+    const id = queue.shift()!
+    const layer = depth.get(id) ?? 0
+    if (!layers[layer]) layers[layer] = []
+    layers[layer].push(id)
+    for (const next of outgoing.get(id) ?? []) {
+      const nextDepth = Math.max(depth.get(next) ?? 0, layer + 1)
+      depth.set(next, nextDepth)
+      indegree.set(next, (indegree.get(next) ?? 0) - 1)
+      if (indegree.get(next) === 0) queue.push(next)
+    }
+  }
+
+  // 环中的节点（正常会被前置校验拦截）兜底放入首层
+  nodes.forEach((node) => {
+    if (!depth.has(node.id)) {
+      depth.set(node.id, 0)
+      if (!layers[0]) layers[0] = []
+      layers[0].push(node.id)
+    }
+  })
+  return layers.filter((layer) => layer.length > 0)
+}
+
+export function edgeRecordOf(edge: WorkflowEdge): PlanEdgeRecord {
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle ?? '',
+    targetHandle: edge.targetHandle ?? '',
+    portType: edge.data?.portType ?? 'dataset',
+  }
+}
+
+/**
+ * 计算每个节点的结果指纹：
+ * 节点类型 + 配置版本 + 配置内容 + 入边集合 + 上游指纹，
+ * 任一上游或连线变化都会沿依赖链向下传导。
+ */
+export function computeFingerprints(nodes: WorkflowNode[], edges: WorkflowEdge[]): Record<string, string> {
+  const edgeRecords = edges.map(edgeRecordOf)
+  const fingerprints: Record<string, string> = {}
+  for (const layer of computeLayers(nodes, edges)) {
+    for (const id of layer) {
+      const node = nodes.find((item) => item.id === id)
+      if (!node) continue
+      const incoming = edgeRecords.filter((edge) => edge.target === id)
+      const edgeSig = incoming
+        .map((edge) => `${edge.source}>${edge.sourceHandle}>${edge.targetHandle}>${edge.portType}`)
+        .sort()
+        .join('|')
+      const upstreamSig = incoming
+        .map((edge) => fingerprints[edge.source] ?? '')
+        .sort()
+        .join('|')
+      fingerprints[id] = hashString(
+        `${node.data.kind}#${node.data.configVersion}#${stableConfig(node.data.config)}|${edgeSig}|${upstreamSig}`,
+      )
+    }
+  }
+  return fingerprints
+}
+
+/** 计划指纹：节点标识+配置版本 与 连接关系 的整体摘要，作为幂等提交的依据 */
+export function planFingerprint(nodes: WorkflowNode[], edges: WorkflowEdge[]): string {
+  const nodeSig = nodes
+    .map((node) => `${node.id}@${node.data.configVersion}`)
+    .sort()
+    .join(',')
+  const edgeSig = edges
+    .map((edge) => `${edge.source}${edge.sourceHandle ?? ''}-${edge.target}${edge.targetHandle ?? ''}:${edge.data?.portType ?? 'dataset'}`)
+    .sort()
+    .join(',')
+  return hashString(`N:${nodeSig}|E:${edgeSig}`)
+}
+
+/** 依据当前画布生成执行计划，并标记可复用的历史成功结果 */
+export function buildExecutionPlan(nodes: WorkflowNode[], edges: WorkflowEdge[], previous: ExecutionPlan | null): ExecutionPlan {
+  const layers = computeLayers(nodes, edges)
+  const edgeRecords = edges.map(edgeRecordOf)
+  const fingerprints = computeFingerprints(nodes, edges)
+  const previousRecords = new Map(previous?.nodes.map((record) => [record.id, record]) ?? [])
+
+  const records: PlanNodeRecord[] = nodes.map((node) => {
+    const fingerprint = fingerprints[node.id]
+    const before = previousRecords.get(node.id)
+    const cached = !!before && before.status === 'success' && before.fingerprint === fingerprint
+    return {
+      id: node.id,
+      kind: node.data.kind,
+      configVersion: node.data.configVersion,
+      fingerprint,
+      status: cached ? 'success' : 'pending',
+      cached,
+      attempts: 0,
+      retries: 0,
+      duration: cached ? before?.duration : undefined,
+      rows: cached ? before?.rows : undefined,
+    }
+  })
+
+  const cachedCount = records.filter((record) => record.cached).length
+  return {
+    id: `plan-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    version: 1,
+    fingerprint: planFingerprint(nodes, edges),
+    createdAt: new Date().toISOString(),
+    status: 'running',
+    layers,
+    nodes: records,
+    edges: edgeRecords,
+    stats: { total: records.length, cached: cachedCount, executed: 0, retries: 0, failed: 0, skipped: 0 },
+  }
+}
+
+/** 打开旧版流程时升级：补齐缺失的配置版本与计划字段，剔除失效引用 */
+export function migrateDocument(document: WorkflowDocument): {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  executionPlan: ExecutionPlan | null
+} {
+  const nodes = (document.nodes ?? []).map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      config: (node.data.config ?? {}) as NodeConfig,
+      configVersion: typeof node.data.configVersion === 'number' ? node.data.configVersion : 1,
+      status: 'idle' as RunStatus,
+      duration: undefined,
+      rows: undefined,
+    },
+  })) as WorkflowNode[]
+
+  const edges = (document.edges ?? []).map((edge) => ({
+    ...edge,
+    data: { portType: edge.data?.portType ?? 'dataset' as PortType },
+  })) as WorkflowEdge[]
+
+  const knownIds = new Set(nodes.map((node) => node.id))
+  let executionPlan: ExecutionPlan | null = null
+  if (document.executionPlan && document.executionPlan.version === 1) {
+    const plan = document.executionPlan
+    executionPlan = {
+      ...plan,
+      // 导出时若仍在执行，视为中断，避免导入一个“运行中”的计划
+      status: plan.status === 'running' ? 'failed' : plan.status,
+      abortReason: plan.status === 'running' ? '导入的计划在导出时尚未结束' : plan.abortReason,
+      nodes: plan.nodes
+        .filter((record) => knownIds.has(record.id))
+        .map((record) => ({ ...record, cached: false })),
+      edges: plan.edges.filter((edge) => knownIds.has(edge.source) && knownIds.has(edge.target)),
+      layers: plan.layers
+        .map((layer) => layer.filter((id) => knownIds.has(id)))
+        .filter((layer) => layer.length > 0),
+    }
+  }
+
+  return { nodes, edges, executionPlan }
 }
 
 export function sampleWorkflow(): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {

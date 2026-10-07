@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css'
 import { useEffect, useRef } from 'react'
 import { useWorkflowStore } from '../stores/workflow'
 import WorkflowNodeCard from './WorkflowNodeCard'
+import ExecutionPlanPanel from './ExecutionPlanPanel'
 import type { WorkflowNode } from '../types/workflow'
 
 const nodeTypes = { workflow: WorkflowNodeCard }
@@ -102,6 +103,7 @@ function CanvasInner() {
         <MiniMap nodeColor={(node) => node.data.kind === 'sink' ? '#16a34a' : '#2563eb'} pannable zoomable />
         <Controls />
         {notice && <Panel position="top-center"><div className="canvas-notice">{notice}</div></Panel>}
+        <ExecutionPlanPanel />
       </ReactFlow>
     </div>
   )

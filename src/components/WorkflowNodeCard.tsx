@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons'
 import type { RunStatus, WorkflowNode } from '../types/workflow'
+import { useWorkflowStore } from '../stores/workflow'
 import { definitionFor } from '../utils/workflow'
 
 const statusIcon: Record<RunStatus, React.ReactNode> = {
@@ -12,8 +13,11 @@ const statusIcon: Record<RunStatus, React.ReactNode> = {
   skipped: <ClockCircleOutlined />,
 }
 
-export default function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowNode>) {
+export default function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>) {
   const definition = definitionFor(data.kind)
+  const cached = useWorkflowStore((state) =>
+    state.executionPlan?.nodes.find((record) => record.id === id)?.cached ?? false,
+  )
   return (
     <div
       className={`workflow-node ${selected ? 'is-selected' : ''} status-${data.status}`}
@@ -39,6 +43,7 @@ export default function WorkflowNodeCard({ data, selected }: NodeProps<WorkflowN
       <strong>{data.label}</strong>
       <p>{data.description}</p>
       <div className="node-metrics">
+        {cached && <span className="node-cached">↻ 复用上轮结果</span>}
         {data.rows !== undefined && <span>{data.rows.toLocaleString('zh-CN')} 行</span>}
         {data.duration !== undefined && <span>{data.duration} ms</span>}
       </div>
